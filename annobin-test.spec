@@ -1,7 +1,7 @@
 Name: annobin-test
 Version: 1.0.0
 Release: %autorelease
-Summary: A "Hello, world!" program build with gcc and clang
+Summary: "Hello, world!" programs build with gcc and clang
 
 License: BSD-3-Clause
 URL: http://www.example.com
@@ -28,43 +28,51 @@ mkdir -pv out
 
 #region build-with-gcc
 
-%global extra_flags_gcc %nil
+%global flags_gcc_exe %nil
 
 # Hardened: main-gcc: FAIL: bind-now test because not linked with -Wl,-z,now
 # See https://sourceware.org/annobin/annobin.html/Test-bind-now.html
-%global extra_flags_gcc %{?extra_flags_gcc} -Wl,-z,now
+%global flags_gcc_exe %{?flags_gcc_exe} -Wl,-z,now
 
 # Hardened: main-gcc: FAIL: pie test because not built with '-Wl,-pie' 
 # See https://sourceware.org/annobin/annobin.html/Test-pic.html
-%global extra_flags_gcc %{?extra_flags_gcc} -fPIC
+%global flags_gcc_exe %{?flags_gcc_exe} -fPIC
 
 # Hardened: main-gcc: FAIL: cf-protection test because no .note.gnu.property section = no control flow information 
 # See https://sourceware.org/annobin/annobin.html/Test-cf-protection.html
-%global extra_flags_gcc %{?extra_flags_gcc} -fcf-protection=full
+%global flags_gcc_exe %{?flags_gcc_exe} -fcf-protection=full
+
+%global flags_gcc_lib %{?flags_gcc_exe}
 
 # Build *.so
-gcc -shared -o out/libprint_welcome-gcc.so %{?extra_flags_gcc} %{SOURCE2}
+gcc -shared -o out/libprint_welcome-gcc.so %{?flags_gcc_lib} %{SOURCE2}
 
-gcc -o out/main-gcc -Lout/ -lprint_welcome-gcc %{?extra_flags_gcc} %{SOURCE0}
+# Build executable
+gcc -o out/main-gcc -Lout/ -lprint_welcome-gcc %{?flags_gcc_exe} %{SOURCE0}
 
 #endregion build-with-gcc
 
 #endregion build-with-clang
 
-%global extra_flags_clang %nil
+%global flags_clang_exe %nil
 
 # Hardened: main-clang: FAIL: bind-now test because not linked with -Wl,-z,now 
 # See https://sourceware.org/annobin/annobin.html/Test-bind-now.html
-%global extra_flags_clang %{?extra_flags_clang} -Wl,-z,now
+%global flags_clang_exe %{?flags_clang_exe} -Wl,-z,now
 
 # Hardened: main-clang: FAIL: cf-protection test because no .note.gnu.property section = no control flow information 
 # See https://sourceware.org/annobin/annobin.html/Test-cf-protection.html
-%global extra_flags_clang %{?extra_flags_clang} -fcf-protection=full
+%global flags_clang_exe %{?flags_clang_exe} -fcf-protection=full
+
+# Hardened: libprint_welcome-clang.so: FAIL: textrel test because the DT_TEXTREL tag was detected 
+# See https://sourceware.org/annobin/annobin.html/Test-textrel.html
+%global flags_clang_lib %{?flags_clang_exe} -fPIC
 
 # Build *.so
-clang -shared -o out/libprint_welcome-clang.so %{?extra_flags_clang} %{SOURCE2}
+clang -shared -o out/libprint_welcome-clang.so %{?flags_clang_lib} %{SOURCE2}
 
-clang -o out/main-clang -Lout/ -lprint_welcome-clang %{?extra_flags_clang} %{SOURCE0}
+# Build executable
+clang -o out/main-clang -Lout/ -lprint_welcome-clang %{?flags_clang_exe} %{SOURCE0}
 
 #endregion build-with-clang
 
@@ -91,12 +99,20 @@ export LD_LIBRARY_PATH=%{buildroot}%{_libdir}
 # Hardened: main-gcc: FAIL: pie test because not built with '-Wl,-pie' 
 # See https://sourceware.org/annobin/annobin.html/Test-pie.html 
 annocheck --skip-pie %{buildroot}%{_bindir}/welcome_gcc
-annocheck --verbose %{buildroot}%{_libdir}/libprint_welcome-gcc.so
+
+# --skip-gaps is needed because of: 
+# Hardened: [...]libprint_welcome-clang.so: FAIL: gaps test because gaps were detected in the annobin coverage 
+# See https://sourceware.org/annobin/annobin.html/Test-gaps.html
+annocheck --skip-gaps %{buildroot}%{_libdir}/libprint_welcome-gcc.so
 
 # Hardened: main-clang: FAIL: pie test because not built with '-Wl,-pie' 
 # See https://sourceware.org/annobin/annobin.html/Test-pie.html 
 annocheck --skip-pie %{buildroot}%{_bindir}/welcome_clang
-annocheck --skip-pie %{buildroot}%{_libdir}/libprint_welcome-clang.so
+
+# --skip-gaps is needed because of: 
+# Hardened: [...]libprint_welcome-gcc.so: FAIL: gaps test because gaps were detected in the annobin coverage
+# See https://sourceware.org/annobin/annobin.html/Test-gaps.html
+annocheck --skip-gaps %{buildroot}%{_libdir}/libprint_welcome-clang.so
 
 %files
 %{_bindir}/welcome_gcc
