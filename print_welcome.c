@@ -1,12 +1,11 @@
 #include <stdio.h>
 
-int main(int argc, char* argv[]) {
+void print_welcome() {
     printf("Hello, world! (%s)",
 #ifdef __clang__
         "clang"
 #else
         "gcc"
 #endif
-    );    
-    return 0;
+    );
 }

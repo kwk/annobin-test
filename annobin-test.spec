@@ -5,7 +5,9 @@ Summary: A "Hello, world!" program build with gcc and clang
 
 License: BSD-3-Clause
 URL: http://www.example.com
-Source0: main.c
+Source0: welcome.c
+Source1: print_welcome.h
+Source2: print_welcome.c
 
 BuildRequires: clang
 BuildRequires: gcc
@@ -40,7 +42,10 @@ mkdir -pv out
 # See https://sourceware.org/annobin/annobin.html/Test-cf-protection.html
 %global extra_flags_gcc %{?extra_flags_gcc} -fcf-protection=full
 
-gcc -o out/main-gcc %{?extra_flags_gcc} %{SOURCE0}
+# Build *.so
+gcc -shared -o out/libprint_welcome-gcc.so %{?extra_flags_gcc} %{SOURCE2}
+
+gcc -o out/main-gcc -Lout/ -lprint_welcome-gcc %{?extra_flags_gcc} %{SOURCE0}
 
 #endregion build-with-gcc
 
@@ -56,35 +61,48 @@ gcc -o out/main-gcc %{?extra_flags_gcc} %{SOURCE0}
 # See https://sourceware.org/annobin/annobin.html/Test-cf-protection.html
 %global extra_flags_clang %{?extra_flags_clang} -fcf-protection=full
 
-clang -o out/main-clang %{?extra_flags_clang} %{SOURCE0}
+# Build *.so
+clang -shared -o out/libprint_welcome-clang.so %{?extra_flags_clang} %{SOURCE2}
+
+clang -o out/main-clang -Lout/ -lprint_welcome-clang %{?extra_flags_clang} %{SOURCE0}
 
 #endregion build-with-clang
 
 %install
 mkdir -pv %{buildroot}%{_bindir}
-install out/main-gcc %{buildroot}%{_bindir}/annobin-test-gcc
-install out/main-clang %{buildroot}%{_bindir}/annobin-test-clang
+mkdir -pv %{buildroot}%{_libdir}
+
+install out/main-gcc %{buildroot}%{_bindir}/welcome_gcc
+install out/main-clang %{buildroot}%{_bindir}/welcome_clang
+install out/libprint_welcome-gcc.so %{buildroot}%{_libdir}/libprint_welcome-gcc.so
+install out/libprint_welcome-clang.so %{buildroot}%{_libdir}/libprint_welcome-clang.so
 
 %check
 # Check each binary outputs its compiler
-[[ "`%{buildroot}%{_bindir}/annobin-test-gcc`" != "Hello, world! (gcc)" ]] && exit 111;
-[[ "`%{buildroot}%{_bindir}/annobin-test-clang`" != "Hello, world! (clang)" ]] && exit 222;
+export LD_LIBRARY_PATH=%{buildroot}%{_libdir}
+
+[[ "`%{buildroot}%{_bindir}/welcome_gcc`" != "Hello, world! (gcc)" ]] && exit 111;
+[[ "`%{buildroot}%{_bindir}/welcome_clang`" != "Hello, world! (clang)" ]] && exit 222;
 
 # NOTE: I know that annocheck can check the whole RPM later but
-# I want to also test the binaries here individually to see what
-# things I need to tweak for what artifact.
+# I want to also test the binaries and shared objects here
+# individually to see what things I need to tweak for what artifact.
 
 # Hardened: main-gcc: FAIL: pie test because not built with '-Wl,-pie' 
 # See https://sourceware.org/annobin/annobin.html/Test-pie.html 
-annocheck --skip-pie %{buildroot}%{_bindir}/annobin-test-gcc
+annocheck --skip-pie %{buildroot}%{_bindir}/welcome_gcc
+annocheck --verbose %{buildroot}%{_libdir}/libprint_welcome-gcc.so
 
 # Hardened: main-clang: FAIL: pie test because not built with '-Wl,-pie' 
 # See https://sourceware.org/annobin/annobin.html/Test-pie.html 
-annocheck --skip-pie %{buildroot}%{_bindir}/annobin-test-clang
+annocheck --skip-pie %{buildroot}%{_bindir}/welcome_clang
+annocheck --skip-pie %{buildroot}%{_libdir}/libprint_welcome-clang.so
 
 %files
-%{_bindir}/annobin-test-gcc
-%{_bindir}/annobin-test-clang
+%{_bindir}/welcome_gcc
+%{_bindir}/welcome_clang
+%{_libdir}/libprint_welcome-gcc.so
+%{_libdir}/libprint_welcome-clang.so
 
 %changelog
 %autochangelog
